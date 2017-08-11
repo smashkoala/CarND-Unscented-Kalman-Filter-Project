@@ -11,8 +11,6 @@ using std::vector;
  * Initializes Unscented Kalman filter
  */
 UKF::UKF() {
-  cout << "Constructor started" << endl;
-  
   // if this is false, laser measurements will be ignored (except during init)
   use_laser_ = true;
 
@@ -25,6 +23,7 @@ UKF::UKF() {
   // initial covariance matrix
   P_ = MatrixXd(5, 5);
   
+  // Measurement function matrix for laser
   H_laser_ = MatrixXd(2, 5);
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
@@ -63,7 +62,7 @@ UKF::UKF() {
         0, 0, 0, 1.0, 0,
         0, 0, 0, 0, 0.001;
   
-  H_laser_ <<  1, 0, 0, 0, 0,
+  H_laser_ <<   1, 0, 0, 0, 0,
                 0, 1, 0, 0, 0;
 
   is_initialized_ = false;
@@ -129,6 +128,7 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
     Prediction(dt);
     UpdateRadar(meas_package);
+    //Normalize yaw angle
     x_(3) = NormalizeAngle(x_(3));
   } else if(meas_package.sensor_type_ == MeasurementPackage::LASER && use_laser_) {
     // Laser updates
@@ -138,6 +138,7 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
       
     Prediction(dt);
     UpdateLidar(meas_package);
+    //Normailize yaw angle
     x_(3) = NormalizeAngle(x_(3));
   }  
 }
@@ -417,6 +418,7 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   //Kalman gain K;
   MatrixXd K = Tc * S.inverse();
   
+  //residual
   VectorXd z_diff2 = meas_package.raw_measurements_ - z_pred;
   
   //update state mean and covariance matrix
