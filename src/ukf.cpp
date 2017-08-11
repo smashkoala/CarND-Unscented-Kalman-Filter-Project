@@ -29,10 +29,10 @@ UKF::UKF() {
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
 //  std_a_ = 30;
-  std_a_ = 2;
+  std_a_ = 2.5;
   // Process noise standard deviation yaw acceleration in rad/s^2
 //  std_yawdd_ = 30;
-  std_yawdd_ =  0.5;
+  std_yawdd_ =  0.91;
   
   // Laser measurement noise standard deviation position1 in m
   std_laspx_ = 0.15;
@@ -58,11 +58,11 @@ UKF::UKF() {
   */
   x_ << 0, 0, 0, 0, 0;
   
-  P_ << 1, 0, 0, 0, 0,
-        0, 1, 0, 0, 0,
-        0, 0, 50, 0, 0,
-        0, 0, 0, 1, 0,
-        0, 0, 0, 0, 1;
+  P_ << 0.1, 0, 0, 0, 0,
+        0, 0.1, 0, 0, 0,
+        0, 0, 10, 0, 0,
+        0, 0, 0, 1.0, 0,
+        0, 0, 0, 0, 0.001;
   
   H_laser_ <<  1, 0, 0, 0, 0,
                 0, 1, 0, 0, 0;
@@ -99,12 +99,15 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
       /**
        Convert radar from polar to cartesian coordinates and initialize state.
        */
-      float px, py;
-      float ro = meas_package.raw_measurements_[0];
-      float theta = meas_package.raw_measurements_[1];
+      double px, py;
+      double ro = meas_package.raw_measurements_[0];
+      double theta = meas_package.raw_measurements_[1];
       px = ro * cos(theta);
       py = ro * sin(theta);
-      x_ << px, py, 0.0, 0.0, 0.0;
+      double vx = ro*cos(theta);
+      double vy = ro*sin(theta);
+      double v = sqrt(vx*vx + vy*vy);
+      x_ << px, py, v, 0.0, 0.0;
 
     }
     else if (meas_package.sensor_type_ == MeasurementPackage::LASER) {
@@ -149,12 +152,12 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
  */
 
 double UKF::NormalizeAngle(double angle) {
-  if(angle > M_PI) {
-    angle = fmod(angle - M_PI, 2*M_PI) - M_PI;
-  }
-  if(angle < -M_PI) {
-    angle = fmod(angle + M_PI, 2*M_PI) + M_PI;
-  }
+//  if(angle > M_PI) {
+//    angle = fmod(angle - M_PI, 2*M_PI) - M_PI;
+//  }
+//  if(angle < -M_PI) {
+//    angle = fmod(angle + M_PI, 2*M_PI) + M_PI;
+//  }
   return angle;
 }
 
@@ -197,17 +200,9 @@ void UKF::Prediction(double delta_t) {
     Xsig_aug.col(i+1)       = x_aug + sqrt(lambda_+n_aug_) * L.col(i);
     Xsig_aug.col(i+1+n_aug_) = x_aug - sqrt(lambda_+n_aug_) * L.col(i);
     Xsig_aug(3, i+1) = NormalizeAngle(Xsig_aug(3, i+1));
-//    while(Xsig_aug(3, i+1) > M_PI) Xsig_aug(3, i+1)-=2*M_PI;
-//    while(Xsig_aug(3, i+1) < -M_PI) Xsig_aug(3, i+1)+=2*M_PI;
     Xsig_aug(3, i+1+n_aug_) = NormalizeAngle(Xsig_aug(3, i+1+n_aug_));
-//    while(Xsig_aug(3, i+1+n_aug_) > M_PI) Xsig_aug(3, i+1+n_aug_)-=2*M_PI;
-//    while(Xsig_aug(3, i+1+n_aug_) < -M_PI) Xsig_aug(3, i+1+n_aug_)+=2*M_PI;
     Xsig_aug(4, i+1) = NormalizeAngle(Xsig_aug(4, i+1));
-//    while(Xsig_aug(4, i+1) > M_PI) Xsig_aug(4, i+1)-=2*M_PI;
-//    while(Xsig_aug(4, i+1) < -M_PI) Xsig_aug(4, i+1)+=2*M_PI;
     Xsig_aug(4, i+1+n_aug_) = NormalizeAngle(Xsig_aug(4, i+1+n_aug_));
-//    while(Xsig_aug(4, i+1+n_aug_) > M_PI) Xsig_aug(4, i+1+n_aug_)-=2*M_PI;
-//    while(Xsig_aug(4, i+1+n_aug_) < -M_PI) Xsig_aug(4, i+1+n_aug_)+=2*M_PI;
   }
   
   //
@@ -234,33 +229,26 @@ void UKF::Prediction(double delta_t) {
     if (fabs(yawd) > 0.001) {
       px_p = p_x + v/yawd * ( sin (yaw + yawd*delta_t) - sin(yaw));
       py_p = p_y + v/yawd * ( cos(yaw) - cos(yaw+yawd*delta_t) );
-    }
-    else {
+    } else {
       px_p = p_x + v*delta_t*cos(yaw);
       py_p = p_y + v*delta_t*sin(yaw);
     }
-    
-    double v_p = v;
-    double yaw_p = yaw + yawd*delta_t;
-    yaw_p = NormalizeAngle(yaw_p);
-//    while(yaw_p > M_PI) yaw_p-=2*M_PI;
-//    while(yaw_p < -M_PI) yaw_p+=2*M_PI;
-    double yawd_p = yawd;
-    
     //add noise
     px_p = px_p + 0.5*nu_a*delta_t*delta_t * cos(yaw);
     py_p = py_p + 0.5*nu_a*delta_t*delta_t * sin(yaw);
+    
+    
+    double v_p = v;
     v_p = v_p + nu_a*delta_t;
     
+    double yaw_p = yaw + yawd*delta_t;
+    yaw_p = NormalizeAngle(yaw_p);
     yaw_p = yaw_p + 0.5*nu_yawdd*delta_t*delta_t;
     yaw_p = NormalizeAngle(yaw_p);
-//    while (yaw_p> M_PI) yaw_p-=2.*M_PI;
-//    while (yaw_p<-M_PI) yaw_p+=2.*M_PI;
     
+    double yawd_p = yawd;
     yawd_p = yawd_p + nu_yawdd*delta_t;
     yawd_p = NormalizeAngle(yawd_p);
-//    while (yawd_p> M_PI) yawd_p-=2.*M_PI;
-//    while (yawd_p<-M_PI) yawd_p+=2.*M_PI;
     
     //write predicted sigma point into right column
     Xsig_pred_(0,i) = px_p;
@@ -292,12 +280,8 @@ void UKF::Prediction(double delta_t) {
   for (int i = 0; i < 2 * n_aug_ + 1; i++) {  //iterate over sigma points
     x_ = x_+ weights_(i) * Xsig_pred_.col(i);
     x_(3) = NormalizeAngle(x_(3));
-//    while (x_(3)> M_PI) x_(3)-=2.*M_PI;
-//    while (x_(3)<-M_PI) x_(3)+=2.*M_PI;
     cout << "x_(4)" << x_(4) << endl;
     x_(4) = NormalizeAngle(x_(4));
-//    while (x_(4)> M_PI) x_(4)-=2.*M_PI;
-//    while (x_(4)<-M_PI) x_(4)+=2.*M_PI;
   }
   
   //predicted state covariance matrix
@@ -308,11 +292,7 @@ void UKF::Prediction(double delta_t) {
     VectorXd x_diff = Xsig_pred_.col(i) - x_;
     //angle normalization
     x_diff(3) = NormalizeAngle(x_diff(3));
-//    while (x_diff(3)> M_PI) x_diff(3)-=2.*M_PI;
-//    while (x_diff(3)<-M_PI) x_diff(3)+=2.*M_PI;
     x_diff(4) = NormalizeAngle(x_diff(4));
-//    while (x_diff(4)> M_PI) x_diff(4)-=2.*M_PI;
-//    while (x_diff(4)<-M_PI) x_diff(4)+=2.*M_PI;
     
     P_ = P_ + weights_(i) * x_diff * x_diff.transpose() ;
   }
@@ -419,8 +399,6 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
 
   //angle normalization
   z_pred(1) = NormalizeAngle(z_pred(1));
-//  while (z_pred(1)> M_PI) z_pred(1)-=2.*M_PI;
-//  while (z_pred(1)<-M_PI) z_pred(1)+=2.*M_PI;
   
   //measurement covariance matrix S
   MatrixXd S = MatrixXd(n_z,n_z);
@@ -431,8 +409,6 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
     
     //angle normalization
     z_diff(1) = NormalizeAngle(z_diff(1));
-//    while (z_diff(1)> M_PI) z_diff(1)-=2.*M_PI;
-//    while (z_diff(1)<-M_PI) z_diff(1)+=2.*M_PI;
     
     S = S + weights_(i) * z_diff * z_diff.transpose();
   }
