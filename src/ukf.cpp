@@ -128,8 +128,6 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
     Prediction(dt);
     UpdateRadar(meas_package);
-    //Normalize yaw angle
-    x_(3) = NormalizeAngle(x_(3));
   } else if(meas_package.sensor_type_ == MeasurementPackage::LASER && use_laser_) {
     // Laser updates
     //compute the time elapsed between the current and previous measurements
@@ -138,16 +136,12 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
       
     Prediction(dt);
     UpdateLidar(meas_package);
-    //Normailize yaw angle
-    x_(3) = NormalizeAngle(x_(3));
-  }  
+  }
 }
 
-
 /**
- * Predicts sigma points, the state, and the state covariance matrix.
- * @param {double} delta_t the change in time (in seconds) between the last
- * measurement and this one.
+ * Normalize angle
+ * @param angle The angle to be normalized
  */
 
 double UKF::NormalizeAngle(double angle) {
@@ -159,6 +153,12 @@ double UKF::NormalizeAngle(double angle) {
   }
   return angle;
 }
+
+/**
+ * Predicts sigma points, the state, and the state covariance matrix.
+ * @param {double} delta_t the change in time (in seconds) between the last
+ * measurement and this one.
+ */
 
 void UKF::Prediction(double delta_t) {
   /**
@@ -294,6 +294,9 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
 
   You'll also need to calculate the lidar NIS.
   */
+  //
+  //Here for Lidar, using Normal Kalman filter
+  //
   int n_z = 2;
   
   VectorXd z_pred = H_laser_ * x_;
@@ -315,11 +318,14 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   
   x_ = x_ + (K * y);
   
+  //Normalize yaw angle
+  x_(3) = NormalizeAngle(x_(3));
+  
   int x_size = x_.size();
   MatrixXd I = MatrixXd::Identity(x_size, x_size);
   P_ = (I - K * H_laser_) * P_;
   
-  //Calculate NIS
+  //Normalized innovation squared (NIS)
   double nis = y.transpose() * Si * y;
   cout << "lidar nis = " << nis << endl;
 }
@@ -423,6 +429,10 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   
   //update state mean and covariance matrix
   x_ = x_ + K * z_diff2;
+  
+  //Normalize yaw angle
+  x_(3) = NormalizeAngle(x_(3));
+
   P_ = P_ - K*S*K.transpose();
   
   //Normalized innovation squared (NIS)
