@@ -28,10 +28,9 @@ UKF::UKF() {
   H_laser_ = MatrixXd(2, 5);
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
-//  std_a_ = 30;
   std_a_ = 2.5;
+  
   // Process noise standard deviation yaw acceleration in rad/s^2
-//  std_yawdd_ = 30;
   std_yawdd_ =  0.91;
   
   // Laser measurement noise standard deviation position1 in m
@@ -60,7 +59,7 @@ UKF::UKF() {
   
   P_ << 0.1, 0, 0, 0, 0,
         0, 0.1, 0, 0, 0,
-        0, 0, 10, 0, 0,
+        0, 0, 10.0, 0, 0,
         0, 0, 0, 1.0, 0,
         0, 0, 0, 0, 0.001;
   
@@ -74,7 +73,8 @@ UKF::UKF() {
   n_aug_ = 7;
   
   time_us_ = 0;
-  cout << "Constructor ended!" << endl;
+  
+  lambda_ = 3 - n_aug_;
 }
 
 UKF::~UKF() {}
@@ -121,30 +121,25 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
     return;
   }
   
-  if (meas_package.sensor_type_ == MeasurementPackage::RADAR) {
+  if (meas_package.sensor_type_ == MeasurementPackage::RADAR && use_radar_) {
     // Radar updates
-    if(use_radar_) {
-      //compute the time elapsed between the current and previous measurements
-      float dt = (meas_package.timestamp_ - time_us_) / 1000000.0;	//dt - expressed in seconds
-      time_us_ = meas_package.timestamp_;
+    //compute the time elapsed between the current and previous measurements
+    float dt = (meas_package.timestamp_ - time_us_) / 1000000.0;	//dt - expressed in seconds
+    time_us_ = meas_package.timestamp_;
 
-      Prediction(dt);
-      UpdateRadar(meas_package);
-    }
-  } else {
+    Prediction(dt);
+    UpdateRadar(meas_package);
+    x_(3) = NormalizeAngle(x_(3));
+  } else if(meas_package.sensor_type_ == MeasurementPackage::LASER && use_laser_) {
     // Laser updates
-    if(use_laser_) {
-      //compute the time elapsed between the current and previous measurements
-      float dt = (meas_package.timestamp_ - time_us_) / 1000000.0;	//dt - expressed in seconds
-      time_us_ = meas_package.timestamp_;
+    //compute the time elapsed between the current and previous measurements
+    float dt = (meas_package.timestamp_ - time_us_) / 1000000.0;	//dt - expressed in seconds
+    time_us_ = meas_package.timestamp_;
       
-      Prediction(dt);
-      UpdateLidar(meas_package);
-    }
-  }
-  cout << "before normalization x_ = " << x_ << endl;
-  x_(3) = NormalizeAngle(x_(3));
-  cout << "after normalization x_ = " << x_ << endl;
+    Prediction(dt);
+    UpdateLidar(meas_package);
+    x_(3) = NormalizeAngle(x_(3));
+  }  
 }
 
 
@@ -261,8 +256,6 @@ void UKF::Prediction(double delta_t) {
   weights_ = VectorXd(2*n_aug_+1);
   weights_.fill(0.0);
   
-  lambda_ = 3 - n_aug_;
-  
   double weight_0 = lambda_/(lambda_+n_aug_);
   weights_(0) = weight_0;
   for (int i=1; i<2*n_aug_+1; i++) {  //2n+1 weights
@@ -363,6 +356,7 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
     Zsig(0,i) = sqrt(p_x*p_x + p_y*p_y);//r
     Zsig(1,i) = atan2(p_y,p_x);//phi
 
+    //Avoid division by zero
     if((p_x*p_x + p_y*p_y) < 0.000001){
       if(p_x < 0.0001 && p_x >=0){
         p_x = 0.0001;
